@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>HomeGame</title>
+</head>
+<body>
+<h2>HomeGame</h2>
+<div id="chat-log" style="height: 300px; overflow-y: scroll; border: 1px solid black;"></div>
+<input id="chat-message-input" type="text" size="100">
+<button id="send">Send</button>
+
+<script>
+    const userId = '{{ user_id }}';
+    const chatSocket = new WebSocket(
+        'ws://' + window.location.host + '/ws/chat/?user_id=' + userId
+    );
+
+    // ✅ Log immediately after opening socket
+    console.log("Connected with userId =", userId);
+
+    chatSocket.onmessage = function(e) {
+        const data = JSON.parse(e.data);
+        document.getElementById('chat-log').innerHTML += '<div>' + data.message + '</div>';
+    };
+
+    document.getElementById('send').onclick = function () {
+    const messageInputDom = document.getElementById('chat-message-input');
+    const message = messageInputDom.value;
+    console.log("Sending message:", message);
+
+    if (chatSocket.readyState === WebSocket.OPEN) {
+        chatSocket.send(JSON.stringify({ 'message': message }));
+        console.log('message sent ✅');
+    } else {
+        console.error('WebSocket not open ❌', chatSocket.readyState);
+    }
+
+    messageInputDom.value = '';
+};
+    
+</script>
+</body>
+</html>
