@@ -8,6 +8,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
     #daphne poker_site.asgi:application
     players = {}  # user_id → self instance
     pending_inputs = {}  # user_id → asyncio.Future
+    pending_inputs_all={}
 
     async def connect(self):
         #creates an instance of a websocket consumer
@@ -44,7 +45,15 @@ class ChatConsumer(AsyncWebsocketConsumer):
         except Exception as e:
             print(f"[ERROR] Failed to parse JSON: {e}")
             return
-
+        
+        #round continuation loop - in development
+        if 'awaiting all' in self.pending_inputs_all:
+            future = ChatConsumer.pending_inputs_all.pop('awaiting all')
+            print(f"[FUTURE ALL] Resolving input for awaiting all")
+            #complete the future which resumes get_input_all
+            future.set_result(msg)
+            print('all future completed')
+        #end round continuation loop - in development
 
         # If the user is in the pending inputs dictionary
         if self.user_id in ChatConsumer.pending_inputs:
@@ -90,4 +99,21 @@ class ChatConsumer(AsyncWebsocketConsumer):
         #when a user sends a message back the code resumes and returns their response
         response = await future
         print('future delivered to HomeGame bets')
+        return response
+    
+    #in development 
+    async def get_input_all(self, prompt):
+        #send prompt to all users over websocket
+        await self.broadcast_system(prompt)
+        #creates a new future object 
+        future = asyncio.Future()
+        print(f"[INPUT ALL] Waiting for response from any player")
+        #store the future in the pending_inputs dictionary keyed by the phrase 'awaiting all'
+        #the users owe an answer
+        ChatConsumer.pending_inputs_all['awaiting all'] = future
+        print('all future stored')
+        #pauses until any user replies and the future is complete
+        #when a user sends a message back the code resumes and returns their response
+        response = await future
+        print('all future delivered for game and round start')
         return response

@@ -241,7 +241,7 @@ class Table():
         if all(value > 0.2 for value in latest_bets.values()):
             self.pot -= 0.1
         return sum(value for value in latest_bets.values())
-    async def Round_Test(self,bet=0):
+    async def Round(self,bet=0):
         print('round enter')
         await self.output("Game round begins")
         #creates a future object stored in a dictionary with user_id as key
@@ -346,9 +346,10 @@ class Table():
         #change order for next round
         self.round+=1
         self.gameover=False
-        self.order=self.startingorder[-1:]+self.startingorder[:-1]
+        #need to fix order picking for subsequent rounds
+        self.order=self.startingorder[-(self.round-1):]+self.startingorder[:-(self.round-1)]
 
-    def Round(self,bet=0):
+    def Round_Test(self,bet=0):
         '''execute one round'''
         #reset hands
         for x in self.list:
@@ -426,7 +427,7 @@ class Table():
         #change order for next round
         self.round+=1
         self.gameover=False
-        self.order=self.startingorder[-1:]+self.startingorder[:-1]
+        self.order=self.startingorder[-(self.round-1):]+self.startingorder[:-(self.round-1)]
         
    
     
@@ -473,18 +474,36 @@ class Player():
     
         
 async def run_game(player_ids, consumer, smallblind=10, bigblind=10):
+    #create the table 
     table = Table(smallblind, bigblind, output=consumer.broadcast_system, input=consumer.get_input,send_to_user=consumer.send_to_user)
-
+    #add players once 4 people have joined
     for player_id in player_ids:
 
         player=Player(player_id=player_id,balance=20,table=table)
         await table.addplayer(player)
-    
+
+    #start the first round
     print(f"Starting game with {player_ids}")
-    await table.Round_Test()
+    #await table.Round()
 
     print(f"round end")
-    # do your game setup stuff...
+
+    # need to fix round continuation loop
+    round_continue = True
+
+    while round_continue:
+        round_continue = False
+        pending_response=True
+        while pending_response:
+            round_start=await(consumer.get_input_all('Would You Like To Play Another Round, Enter "start new round": '))
+            if round_start=='start new round':
+                await table.Round()
+                round_continue=True
+                pending_response=False
+            else:
+                await(consumer.broadcast_system('[INVALID ENTRY]'))
+    
+    #end round continuation loop
 
     return {
         "status": "started",
