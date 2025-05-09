@@ -473,7 +473,7 @@ class Player():
                     await self.table.send_to_user(self.player_id,"Invalid input. Please enter a valid number.")
     
         
-async def run_game(player_ids, consumer, smallblind=10, bigblind=10):
+async def run_game(player_ids, consumer, smallblind=.10, bigblind=.10):
     #create the table 
     table = Table(smallblind, bigblind, output=consumer.broadcast_system, input=consumer.get_input,send_to_user=consumer.send_to_user)
     #add players once 4 people have joined
