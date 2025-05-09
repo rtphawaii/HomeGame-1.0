@@ -1,6 +1,6 @@
 The HomeGame Poker Web Application
 
-**IMPORTANT:**
+IMPORTANT:
 Game starts when 4 websocket connections are opened
 
 Start a new round of poker by typing 'start new round'
