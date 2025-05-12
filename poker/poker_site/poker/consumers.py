@@ -101,7 +101,6 @@ class ChatConsumer(AsyncWebsocketConsumer):
         print('future delivered to HomeGame bets')
         return response
     
-    #in development 
     async def get_input_all(self, prompt):
         #send prompt to all users over websocket
         await self.broadcast_system(prompt)

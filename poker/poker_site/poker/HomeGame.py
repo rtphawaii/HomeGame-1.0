@@ -82,7 +82,7 @@ class Table():
         
     async def river(self):
         '''deals river'''
-        print('river')
+        print('~river')
         await self.output(f"now dealing the river...")
         #burn one card
         self.deck.pop()
@@ -94,7 +94,8 @@ class Table():
         rank3, suit3 = self.board[2]
         rank4, suit4 = self.board[3]
         rank5, suit5 = self.board[4]
-        await self.output(f"the river is: {rank1.name} of {suit1.name}, {rank2.name} of {suit2.name}, {rank3.name} of {suit3.name}, {rank4.name} of {suit4.name}")
+        print(rank5.name,suit5.name)
+        await self.output(f"the river is: {rank1.name} of {suit1.name}, {rank2.name} of {suit2.name}, {rank3.name} of {suit3.name}, {rank4.name} of {suit4.name}, {rank5.name} of {suit5.name}")
     
     async def bets(self):
         '''betting mechanism'''
