@@ -10,7 +10,7 @@ import random
 import copy
 
 class Table():
-    def __init__(self,smallblind,bigblind,input,output,send_to_user):
+    def __init__(self,smallblind,bigblind,input,output,send_to_user,send_player_info,send_info_all):
         self.list=[]
         self.order=[]
         self.startingorder=[]
@@ -29,6 +29,8 @@ class Table():
         self.output=output
         self.input=input
         self.send_to_user=send_to_user
+        self.send_player_info=send_player_info
+        self.send_info_all=send_info_all
     def createdeck(self):
         '''create the deck'''
         self.deck = [(rank, suit) for rank in Rank for suit in Suit]
@@ -65,6 +67,16 @@ class Table():
         rank2, suit2 = self.board[1]
         rank3, suit3 = self.board[2]
         await self.output(f"the flop is: {rank1.name} of {suit1.name}, {rank2.name} of {suit2.name}, {rank3.name} of {suit3.name}")
+
+        #send the update to the board
+        board_flop=f"{rank1.name} of {suit1.name}, {rank2.name} of {suit2.name}, {rank3.name} of {suit3.name}"
+
+        await self.send_info_all({
+                "board": {
+                    'board':board_flop
+                }})
+
+        
     async def turn(self):
         '''deals turn'''
         print('turn')
@@ -277,6 +289,30 @@ class Table():
             rank2, suit2 = player.hand[1]
             msg = f"your hand is {rank1.name} of {suit1.name}, {rank2.name} of {suit2.name}"
             await self.send_to_user(player.player_id, msg)
+
+        print(f"Sending stats to {player.player_id}:", player.balance)
+
+
+        #sends an update to player info
+        for player in self.order:
+            rank1, suit1 = player.hand[0]
+            rank2, suit2 = player.hand[1]
+            rank1str=str(rank1.name)
+            suit1str=str(suit1.name)
+            rank2str=str(rank2.name)
+            suit2str=str(suit2.name)
+            hand=[(rank1str,suit1str),(rank2str,suit2str)]
+            await self.send_player_info(player.player_id, {
+                "player": {
+                    "name": player.name,
+                    "balance": player.balance,
+                    "currentbet": player.currentbet,
+                    "handscore": player.handscore,
+                    "hand": [(str(r), str(s)) for r, s in hand]
+                }
+            })
+
+
         #preflop
         #add small and big blinds to betting log
         self.bet.append((self.order[1],self.smallblind))
@@ -476,7 +512,7 @@ class Player():
         
 async def run_game(player_ids, consumer, smallblind=.10, bigblind=.10):
     #create the table 
-    table = Table(smallblind, bigblind, output=consumer.broadcast_system, input=consumer.get_input,send_to_user=consumer.send_to_user)
+    table = Table(smallblind, bigblind, output=consumer.broadcast_system, input=consumer.get_input,send_to_user=consumer.send_to_user,send_player_info=consumer.send_player_info,send_info_all=consumer.send_info_all)
     #add players once 4 people have joined
     for player_id in player_ids:
 

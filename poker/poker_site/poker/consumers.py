@@ -31,14 +31,17 @@ class ChatConsumer(AsyncWebsocketConsumer):
             await self.broadcast_system(f"🎮 Game started 🎮 - Player Count: {len(ChatConsumer.players)} ")
 
     async def disconnect(self, close_code):
+        #handles disconnecting for websockets that are opened
         print(f"❌ WebSocket DISCONNECTED for {self.user_id} with code {close_code}")
         await self.channel_layer.group_discard('chat', self.channel_name)
         ChatConsumer.players.pop(self.user_id, None)
 
     async def receive(self, text_data):
+        #debugging statements to ensure receive is being hit
         print(f"[RECEIVE] from {self.user_id}: {text_data}")
         print(f"[PENDING INPUTS] {ChatConsumer.pending_inputs}")
 
+        #ensure that the JSON message can be parsed
         try:
             data = json.loads(text_data)
             msg = data['message']
@@ -46,16 +49,15 @@ class ChatConsumer(AsyncWebsocketConsumer):
             print(f"[ERROR] Failed to parse JSON: {e}")
             return
         
-        #round continuation loop - in development
+        #round continuation loop - awaits a specific response from any websocket
         if 'awaiting all' in self.pending_inputs_all:
             future = ChatConsumer.pending_inputs_all.pop('awaiting all')
             print(f"[FUTURE ALL] Resolving input for awaiting all")
             #complete the future which resumes get_input_all
             future.set_result(msg)
             print('all future completed')
-        #end round continuation loop - in development
 
-        # If the user is in the pending inputs dictionary
+        # Checks to see if the user is in the pending inputs dictionary
         if self.user_id in ChatConsumer.pending_inputs:
             #pop the future that is stored at the user id key
             future = ChatConsumer.pending_inputs.pop(self.user_id)
@@ -64,19 +66,23 @@ class ChatConsumer(AsyncWebsocketConsumer):
             future.set_result(msg)
             print('future completed')
         else:
+            #if the user is not pending a response - send message as a normal group chat message
             await self.channel_layer.group_send(
                 'chat',
                 {'type': 'chat_message', 'message': f'{self.user_id[:5]}: {msg}'}
             )
 
     async def chat_message(self, event):
+        #sends a chat message to the entire group of websockets
         await self.send(text_data=json.dumps({'message': event['message']}))
 
     async def broadcast_system(self, msg):
+        #sends a broadcast message to all users for game rules and notifications
         for player in ChatConsumer.players.values():
             await player.send(text_data=json.dumps({'message': f'[SYSTEM]: {msg}'}))
     
     async def send_to_user(self, user_id, message):
+        #debug print statement to ensure the send_to_user is being hit
         print('message sent to single user')
         #player is an instance of websocket consumer - specifically subclass ChatConsumer
         #it contains websocket methods defined in consumers
@@ -84,6 +90,25 @@ class ChatConsumer(AsyncWebsocketConsumer):
         if player:
             #sends a string to one websocket connection - private message
             await player.send(text_data=json.dumps({'message': message}))
+    
+    async def send_player_info(self, user_id, message):
+        #debug print statement to ensure the send_to_user is being hit
+        print('message sent to single user')
+        #player is an instance of websocket consumer - specifically subclass ChatConsumer
+        #it contains websocket methods defined in consumers
+        player = ChatConsumer.players.get(user_id)
+        if player:
+            #sends a string to one websocket connection - private message
+            await player.send(text_data=json.dumps(message))
+
+
+    async def send_info_all(self, message):
+        print('sending info to all players')
+        for user_id, player in ChatConsumer.players.items():
+            await player.send(text_data=json.dumps(message))
+
+    
+
 
     async def get_input(self, user_id, prompt):
         #send prompt to a specific user over websocket
