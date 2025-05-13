@@ -412,6 +412,20 @@
             color: #c792ea;
             margin-bottom: 15px;
         }
+        #pot-display {
+            background-color: #21262d;
+            border: 1px solid #f78c6c; /* Soft orange accent */
+            color: #e6edf3;
+            padding: 8px 16px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-weight: bold;
+            width: 80%;
+            text-align: center;
+            font-size: 1.1em;
+            letter-spacing: 0.5px;
+            box-shadow: 0 0 8px rgba(247, 140, 108, 0.15);
+        }
 
         #board-display {
             background-color: #21262d;
@@ -489,6 +503,10 @@
      <div id="board-display">
         Board: (Waiting for cards...)
     </div>
+    <!-- ✅ New pot display -->
+    <div id="pot-display">
+        Pot: $0
+    </div>
     <!-- Existing layout -->
     <div class="container">
         <div id="chat-section">
@@ -531,6 +549,11 @@
                 console.log("Board update received ✅", data.board.board);
                 document.getElementById('board-display').textContent = `Board: ${data.board.board}`;
             }
+
+            if (data.pot) {
+            console.log("Pot update received ✅", data.pot.pot);
+            document.getElementById('pot-display').textContent = `Pot: $${data.pot.pot}`;
+        }
         };
 
         document.getElementById('send').onclick = function () {

@@ -70,7 +70,6 @@ class Table():
 
         #send the update to the board
         board_flop=f"{rank1.name} of {suit1.name}, {rank2.name} of {suit2.name}, {rank3.name} of {suit3.name}"
-
         await self.send_info_all({
                 "board": {
                     'board':board_flop
@@ -91,6 +90,13 @@ class Table():
         rank3, suit3 = self.board[2]
         rank4, suit4 = self.board[3]
         await self.output(f"the turn is: {rank1.name} of {suit1.name}, {rank2.name} of {suit2.name}, {rank3.name} of {suit3.name}, {rank4.name} of {suit4.name}")
+
+        #send the update to the board
+        board_turn=f"{rank1.name} of {suit1.name}, {rank2.name} of {suit2.name}, {rank3.name} of {suit3.name}, {rank4.name} of {suit4.name}"
+        await self.send_info_all({
+                "board": {
+                    'board':board_turn
+                }})
         
     async def river(self):
         '''deals river'''
@@ -108,6 +114,13 @@ class Table():
         rank5, suit5 = self.board[4]
         print(rank5.name,suit5.name)
         await self.output(f"the river is: {rank1.name} of {suit1.name}, {rank2.name} of {suit2.name}, {rank3.name} of {suit3.name}, {rank4.name} of {suit4.name}, {rank5.name} of {suit5.name}")
+
+        #send the update to the board
+        board_river=f"{rank1.name} of {suit1.name}, {rank2.name} of {suit2.name}, {rank3.name} of {suit3.name}, {rank4.name} of {suit4.name}, {rank5.name} of {suit5.name}"
+        await self.send_info_all({
+                "board": {
+                    'board':board_river
+                }})
     
     async def bets(self):
         '''betting mechanism'''
@@ -254,6 +267,38 @@ class Table():
         if all(value > 0.2 for value in latest_bets.values()):
             self.pot -= 0.1
         return sum(value for value in latest_bets.values())
+    
+    async def pot_info_update(self):
+        #send pot info
+        await self.output(f"the pot is: {self.pot}")
+        await self.send_info_all({
+                "pot": {
+                    'pot':self.pot
+                }})
+    
+    async def player_info_update(self):
+        #sends an update to player info
+        
+        for player in self.order:
+            print(f"Sending stats to {player.player_id}:", player.balance)
+            rank1, suit1 = player.hand[0]
+            rank2, suit2 = player.hand[1]
+            rank1str=str(rank1.name)
+            suit1str=str(suit1.name)
+            rank2str=str(rank2.name)
+            suit2str=str(suit2.name)
+            hand=[(rank1str,suit1str),(rank2str,suit2str)]
+            await self.send_player_info(player.player_id, {
+                "player": {
+                    "name": player.name,
+                    "balance": player.balance,
+                    "currentbet": player.currentbet,
+                    "handscore": player.handscore,
+                    "hand": [(str(r), str(s)) for r, s in hand]
+                }
+            })
+            print(f'info update sent to player {player}')
+
     async def Round(self,bet=0):
         print('round enter')
         await self.output("Game round begins")
@@ -290,29 +335,9 @@ class Table():
             msg = f"your hand is {rank1.name} of {suit1.name}, {rank2.name} of {suit2.name}"
             await self.send_to_user(player.player_id, msg)
 
-        print(f"Sending stats to {player.player_id}:", player.balance)
-
-
         #sends an update to player info
-        for player in self.order:
-            rank1, suit1 = player.hand[0]
-            rank2, suit2 = player.hand[1]
-            rank1str=str(rank1.name)
-            suit1str=str(suit1.name)
-            rank2str=str(rank2.name)
-            suit2str=str(suit2.name)
-            hand=[(rank1str,suit1str),(rank2str,suit2str)]
-            await self.send_player_info(player.player_id, {
-                "player": {
-                    "name": player.name,
-                    "balance": player.balance,
-                    "currentbet": player.currentbet,
-                    "handscore": player.handscore,
-                    "hand": [(str(r), str(s)) for r, s in hand]
-                }
-            })
-
-
+        await self.player_info_update()
+        
         #preflop
         #add small and big blinds to betting log
         self.bet.append((self.order[1],self.smallblind))
@@ -322,7 +347,11 @@ class Table():
         await self.bets()
         self.pot=self.potcalc()
         print('pot is: ',self.pot)
-        await self.output(f"the pot is: {self.pot}")
+
+        #send pot info
+        await self.pot_info_update()
+
+
         self.fold_check()
         
         if self.gameover==False:
@@ -332,9 +361,17 @@ class Table():
             self.bet=[]
             await self.bets()
             print(self.bet)
+
+            #sends an update to player info
+            await self.player_info_update()
+
             self.pot+=self.potcalc()
             print('pot:',self.pot)
             await self.output(f"the pot is: {self.pot}")
+
+            #send pot info
+            await self.pot_info_update()
+
             await self.fold_check()
         if self.gameover==False:
             #turn
@@ -342,10 +379,18 @@ class Table():
             self.preflop=False
             self.bet=[]
             await self.bets()
+
+            #sends an update to player info
+            await self.player_info_update()
+
             print(self.bet)
             self.pot+=self.potcalc()
             print('pot:',self.pot)
             await self.output(f"the pot is: {self.pot}")
+
+            #send pot info
+            await self.pot_info_update()
+
             await self.fold_check()
         if self.gameover==False:
             #river
@@ -354,9 +399,17 @@ class Table():
             self.bet=[]
             await self.bets()
             print(self.bet)
+
+            #sends an update to player info
+            await self.player_info_update()
+
             self.pot+=self.potcalc()
             print('pot:',self.pot)
             await self.output(f"the pot is: {self.pot}")
+
+            #send pot info
+            await self.pot_info_update()
+
             self.rivercheck=True
             await self.fold_check()
             await self.evaluate()
@@ -369,6 +422,20 @@ class Table():
             print(x.hand.handenum)
             await self.output(f"{x} has a {str(x.hand.handenum)} with the cards {', '.join(readable_cards)}")
         
+        #sends an update to player info
+        for player in self.list:
+            print(f"Sending stats to {player.player_id}:", player.balance)
+            await self.send_player_info(player.player_id, {
+                "player": {
+                    "name": player.name,
+                    "balance": player.balance,
+                    "currentbet": player.currentbet,
+                    "handscore": player.handscore,
+                    "hand": ['']
+                }
+            })
+            print(f'info update sent to player {player}')
+        
         #reset variables for next round
         self.order=[]
         self.pot=0
@@ -379,6 +446,16 @@ class Table():
         self.rank=[]
         self.preflop=True
         self.rivercheck=False
+
+        #reset pot
+        await self.pot_info_update()
+
+        #reset board
+        await self.send_info_all({
+                "board": {
+                    'board':'new round'
+                }})
+
 
         #change order for next round
         self.round+=1
@@ -386,85 +463,85 @@ class Table():
         #need to fix order picking for subsequent rounds
         self.order=self.startingorder[-(self.round-1):]+self.startingorder[:-(self.round-1)]
 
-    def Round_Test(self,bet=0):
-        '''execute one round'''
-        #reset hands
-        for x in self.list:
-            x.hand=[]
-        if self.round==1:
-            #pick a dealer
-            self.pickdealer()
-            self.startingorder=copy.deepcopy(self.order)
-        #create a new deck
-        self.createdeck()
-        #shuffle the deck
-        self.shuffledeck()
-        #deal each player 2 cards 
-        self.deal()
-        #preflop
-        #add small and big blinds to betting log
-        self.bet.append((self.order[1],self.smallblind))
-        self.bet.append((self.order[2],self.bigblind))
-        #add the small and big blind to the pot
-        self.pot=self.smallblind+self.bigblind
-        print('order:',[x.name for x in self.order])
-        self.bets()
-        print(self.bet)
-        self.pot=self.potcalc()
-        print('pot:',self.pot)
-        self.fold_check()
+    # def Round_Test(self,bet=0):
+    #     '''execute one round'''
+    #     #reset hands
+    #     for x in self.list:
+    #         x.hand=[]
+    #     if self.round==1:
+    #         #pick a dealer
+    #         self.pickdealer()
+    #         self.startingorder=copy.deepcopy(self.order)
+    #     #create a new deck
+    #     self.createdeck()
+    #     #shuffle the deck
+    #     self.shuffledeck()
+    #     #deal each player 2 cards 
+    #     self.deal()
+    #     #preflop
+    #     #add small and big blinds to betting log
+    #     self.bet.append((self.order[1],self.smallblind))
+    #     self.bet.append((self.order[2],self.bigblind))
+    #     #add the small and big blind to the pot
+    #     self.pot=self.smallblind+self.bigblind
+    #     print('order:',[x.name for x in self.order])
+    #     self.bets()
+    #     print(self.bet)
+    #     self.pot=self.potcalc()
+    #     print('pot:',self.pot)
+    #     self.fold_check()
         
-        if self.gameover==False:
-            #flop
-            self.flop()
-            self.preflop=False
-            self.bet=[]
-            self.bets()
-            print(self.bet)
-            self.pot+=self.potcalc()
-            print('pot:',self.pot)
-            self.fold_check()
-        if self.gameover==False:
-            #turn
-            self.turn()
-            self.preflop=False
-            self.bet=[]
-            self.bets()
-            print(self.bet)
-            self.pot+=self.potcalc()
-            print('pot:',self.pot)
-            self.fold_check()
-        if self.gameover==False:
-            #river
-            self.river()
-            self.preflop=False
-            self.bet=[]
-            self.bets()
-            print(self.bet)
-            self.pot+=self.potcalc()
-            print('pot:',self.pot)
-            self.rivercheck=True
-            self.fold_check()
-            self.evaluate()
-        for x in self.list:
-            print(x,'  ','balance:',x.balance)
-            print(x, x.hand)
+    #     if self.gameover==False:
+    #         #flop
+    #         self.flop()
+    #         self.preflop=False
+    #         self.bet=[]
+    #         self.bets()
+    #         print(self.bet)
+    #         self.pot+=self.potcalc()
+    #         print('pot:',self.pot)
+    #         self.fold_check()
+    #     if self.gameover==False:
+    #         #turn
+    #         self.turn()
+    #         self.preflop=False
+    #         self.bet=[]
+    #         self.bets()
+    #         print(self.bet)
+    #         self.pot+=self.potcalc()
+    #         print('pot:',self.pot)
+    #         self.fold_check()
+    #     if self.gameover==False:
+    #         #river
+    #         self.river()
+    #         self.preflop=False
+    #         self.bet=[]
+    #         self.bets()
+    #         print(self.bet)
+    #         self.pot+=self.potcalc()
+    #         print('pot:',self.pot)
+    #         self.rivercheck=True
+    #         self.fold_check()
+    #         self.evaluate()
+    #     for x in self.list:
+    #         print(x,'  ','balance:',x.balance)
+    #         print(x, x.hand)
         
-        #reset variables for next round
-        self.order=[]
-        self.pot=0
-        self.currentprice=self.bigblind
-        self.bet=[]
-        self.board=[]
-        self.deck=[]
-        self.rank=[]
-        self.preflop=True
-        self.rivercheck=False
+    #     #reset variables for next round
+    #     self.order=[]
+    #     self.pot=0
+    #     self.currentprice=self.bigblind
+    #     self.bet=[]
+    #     self.board=[]
+    #     self.deck=[]
+    #     self.rank=[]
+    #     self.preflop=True
+    #     self.rivercheck=False
 
-        #change order for next round
-        self.round+=1
-        self.gameover=False
-        self.order=self.startingorder[-(self.round-1):]+self.startingorder[:-(self.round-1)]
+    #     #change order for next round
+    #     self.round+=1
+    #     self.gameover=False
+    #     self.order=self.startingorder[-(self.round-1):]+self.startingorder[:-(self.round-1)]
         
    
     
@@ -474,7 +551,9 @@ class Player():
         self.player_id=player_id
         self.balance=balance
         self.hand=[]
+        #need to fix currentbet
         self.currentbet=0
+        #need to fix handscore
         self.handscore=0
         self.table=table
         self.name=f'player #{self.player_id[:5]}'
