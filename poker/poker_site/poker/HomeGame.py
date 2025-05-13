@@ -9,6 +9,11 @@ from pokerlib.enums import Rank, Suit
 import random
 import copy
 
+#UPDATES AND FIXES NEEDED:
+#must fix all-in scenarios where one player is out of balance
+#in an all-in scenario the player without balance is forced to fold if another player bets
+#this is not ideal and instead it should skip their action, carve out a side pot, and let the action carry on for other players
+
 class Table():
     def __init__(self,smallblind,bigblind,input,output,send_to_user,send_player_info,send_info_all):
         self.list=[]
