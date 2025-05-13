@@ -10,13 +10,25 @@ import random
 import copy
 
 #UPDATES AND FIXES NEEDED:
+
+#UPDATE 1
 #must fix all-in scenarios where one player is out of balance
 #in an all-in scenario the player without balance is forced to fold if another player bets
 #this is not ideal and instead it should skip their action, carve out a side pot, and let the action carry on for other players
 
+#UPDATE 2 - Done
+# need to deduct small and big blinds from players
+
+#UPDATE 3 - Done
+# need to fix order updating for new rounds
+
+#UPDATE 4 
+# need to deploy to a hosted website using AWS EC2
+
 class Table():
     def __init__(self,smallblind,bigblind,input,output,send_to_user,send_player_info,send_info_all):
         self.list=[]
+        self.perma_list=[]
         self.order=[]
         self.startingorder=[]
         self.pot=0
@@ -44,7 +56,9 @@ class Table():
         random.shuffle(self.deck)
     async def addplayer(self,player):
         '''add a player to the game'''
+        print(f'table is adding {player}')
         self.list.append(player)
+        self.perma_list.append(player)
         await self.send_to_user(player.player_id,f"you are {player}")
     def pickdealer(self):
         '''pick a dealer'''
@@ -258,6 +272,7 @@ class Table():
     def potcalc(self):
         #takes the latest bets from each player unless the player bet then folded
         latest_bets = {}
+        print(self.bet)
         for player, bet in reversed(self.bet):
             if player not in latest_bets and bet != -1:
                 latest_bets[player] = bet
@@ -268,7 +283,9 @@ class Table():
             elif latest_bets[player] != -1:
                 latest_bets[player] = 0  # Treat -1 bet as 0 if there's no previous non-negative bet
             #subtract the latest bet for each player from their balance
+            print('subtracting bet from balance')
             player.balance-=latest_bets[player]
+            print(player,player.balance)
         if all(value > 0.2 for value in latest_bets.values()):
             self.pot -= 0.1
         return sum(value for value in latest_bets.values())
@@ -283,8 +300,30 @@ class Table():
     
     async def player_info_update(self):
         #sends an update to player info
-        
         for player in self.order:
+            print(f"Sending stats to {player.player_id}:", player.balance)
+            rank1, suit1 = player.hand[0]
+            rank2, suit2 = player.hand[1]
+            rank1str=str(rank1.name)
+            suit1str=str(suit1.name)
+            rank2str=str(rank2.name)
+            suit2str=str(suit2.name)
+            hand=[(rank1str,suit1str),(rank2str,suit2str)]
+            await self.send_player_info(player.player_id, {
+                "player": {
+                    "name": player.name,
+                    "balance": player.balance,
+                    "currentbet": player.currentbet,
+                    "handscore": player.handscore,
+                    "hand": [(str(r), str(s)) for r, s in hand]
+                }
+            })
+            print(f'info update sent to player {player}')
+    
+    async def player_info_update_all(self):
+        print('sending player update to: ',self.list)
+        #sends an update to player info
+        for player in self.perma_list:
             print(f"Sending stats to {player.player_id}:", player.balance)
             rank1, suit1 = player.hand[0]
             rank2, suit2 = player.hand[1]
@@ -307,14 +346,7 @@ class Table():
     async def Round(self,bet=0):
         print('round enter')
         await self.output("Game round begins")
-        #creates a future object stored in a dictionary with user_id as key
-        #the future is stored until the websocket receives a message from the user
-        #once the future is completed it is returned and the string is stored in move
-        #move = await self.input(self.list[0].player_id, "What is your move?")
-        #move is sent to all players
-
-        #await self.output(f"{self.list[0]} played: {move}")
-        #await self.send_to_user(self.list[0].player_id,"test send to user")
+        print(self.list)
 
         #reset hands
         for x in self.list:
@@ -349,12 +381,19 @@ class Table():
         self.bet.append((self.order[2],self.bigblind))
         #add the small and big blind to the pot
         self.pot=self.smallblind+self.bigblind
+
+        #go through betting loop
         await self.bets()
+
+        print('after preflop betting loop these players remain: ',self.list)
+
+        #calculate the pot for preflop
         self.pot=self.potcalc()
         print('pot is: ',self.pot)
 
         #send pot info
         await self.pot_info_update()
+        await self.player_info_update_all()
 
 
         self.fold_check()
@@ -376,6 +415,7 @@ class Table():
 
             #send pot info
             await self.pot_info_update()
+            await self.player_info_update()
 
             await self.fold_check()
         if self.gameover==False:
@@ -395,6 +435,7 @@ class Table():
 
             #send pot info
             await self.pot_info_update()
+            await self.player_info_update()
 
             await self.fold_check()
         if self.gameover==False:
@@ -414,6 +455,7 @@ class Table():
 
             #send pot info
             await self.pot_info_update()
+            await self.player_info_update()
 
             self.rivercheck=True
             await self.fold_check()
@@ -465,8 +507,10 @@ class Table():
         #change order for next round
         self.round+=1
         self.gameover=False
-        #need to fix order picking for subsequent rounds
-        self.order=self.startingorder[-(self.round-1):]+self.startingorder[:-(self.round-1)]
+
+        #rotate button clockwise and wrap
+        n = (self.round - 1) % len(self.startingorder)
+        self.order = self.startingorder[n:] + self.startingorder[:n]
 
     # def Round_Test(self,bet=0):
     #     '''execute one round'''
@@ -601,7 +645,9 @@ async def run_game(player_ids, consumer, smallblind=.10, bigblind=.10):
     for player_id in player_ids:
 
         player=Player(player_id=player_id,balance=20,table=table)
+        print(f'adding {player} to table')
         await table.addplayer(player)
+
 
     #start the first round
     print(f"Starting game with {player_ids}")
