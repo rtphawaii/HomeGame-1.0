@@ -9,6 +9,10 @@ class ChatConsumer(AsyncWebsocketConsumer):
     players = {}  # user_id → self instance
     pending_inputs = {}  # user_id → asyncio.Future
     pending_inputs_all={}
+    player_count=None
+    game_started = False
+
+    
 
     async def connect(self):
         #creates an instance of a websocket consumer
@@ -24,11 +28,51 @@ class ChatConsumer(AsyncWebsocketConsumer):
         #accept the websocket connection
         await self.accept()
 
-        # Check if enough players to start game
-        if len(ChatConsumer.players) == 4:  # You can change this number
+        # Only the first connected user sets the player count
+        if ChatConsumer.player_count is None and not ChatConsumer.pending_inputs:
+            # Offload prompting to a background task so receive() can run
+            asyncio.create_task(self.prompt_player_count())
+
+        # Start the game when the required number of players have connected
+        if (not ChatConsumer.game_started and ChatConsumer.player_count is not None and len(ChatConsumer.players) == ChatConsumer.player_count):
+            ChatConsumer.game_started = True  # Prevent duplicate starts
             asyncio.create_task(run_game(list(ChatConsumer.players.keys()), self))
-            print("🏁 run_game finished")
-            await self.broadcast_system(f"🎮 Game started 🎮 - Player Count: {len(ChatConsumer.players)} ")
+            print("🏁 run_game started")
+            await self.broadcast_system(f"🎮 Game started 🎮 - Player Count: {len(ChatConsumer.players)}")
+
+        # # start game 4 player mode
+        # if len(ChatConsumer.players) == 4:  # You can change this number
+        #     asyncio.create_task(run_game(list(ChatConsumer.players.keys()), self))
+        #     print("🏁 run_game finished")
+        #     await self.broadcast_system(f"🎮 Game started 🎮 - Player Count: {len(ChatConsumer.players)} ")
+
+    async def prompt_player_count(self):
+        while True:
+            try:
+                input_value = await self.get_input(self.user_id, '🎲 Enter number of players:')
+                ChatConsumer.player_count = int(input_value)
+
+                if ChatConsumer.player_count==1:
+                    ChatConsumer.player_count=None
+                    raise ValueError
+                
+                if ChatConsumer.player_count>22:
+                    ChatConsumer.player_count=None
+                    raise ValueError
+
+                # Clear futures
+                to_clear = list(ChatConsumer.pending_inputs.items())
+                for player, future in to_clear:
+                    if not future.done():
+                        future.set_result('player count done')
+                ChatConsumer.pending_inputs.clear()
+
+                await self.broadcast_system(f"🔢 Player count set to {ChatConsumer.player_count}")
+                break
+
+            except ValueError:
+                await self.send_to_user(self.user_id, '❌ Invalid entry. Please enter an integer.')
+
 
     async def disconnect(self, close_code):
         #handles disconnecting for websockets that are opened
@@ -56,6 +100,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
             #complete the future which resumes get_input_all
             future.set_result(msg)
             print('all future completed')
+            return
 
         # Checks to see if the user is in the pending inputs dictionary
         if self.user_id in ChatConsumer.pending_inputs:
@@ -93,7 +138,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
     
     async def send_player_info(self, user_id, message):
         #debug print statement to ensure the send_to_user is being hit
-        print('message sent to single user')
+        print('player info delivered to client')
         #player is an instance of websocket consumer - specifically subclass ChatConsumer
         #it contains websocket methods defined in consumers
         player = ChatConsumer.players.get(user_id)
@@ -106,8 +151,6 @@ class ChatConsumer(AsyncWebsocketConsumer):
         print('sending info to all players')
         for user_id, player in ChatConsumer.players.items():
             await player.send(text_data=json.dumps(message))
-
-    
 
 
     async def get_input(self, user_id, prompt):
@@ -141,3 +184,4 @@ class ChatConsumer(AsyncWebsocketConsumer):
         response = await future
         print('all future delivered for game and round start')
         return response
+

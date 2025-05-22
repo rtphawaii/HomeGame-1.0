@@ -22,7 +22,13 @@ import copy
 #UPDATE 3 - Done
 # need to fix order updating for new rounds
 
-#UPDATE 4 
+#UPDATE 4
+# need to fix current bet and hand score
+
+#UPDATE 5
+# need to notify small and big blinds that they are already in for their blinds
+
+#UPDATE 6
 # need to deploy to a hosted website using AWS EC2
 
 class Table():
@@ -43,6 +49,7 @@ class Table():
         self.rivercheck=False
         self.gameover=False
         self.round=1
+        self.all_in=[]
         self.output=output
         self.input=input
         self.send_to_user=send_to_user
@@ -184,6 +191,12 @@ class Table():
                         if len(self.order)<=1:
                             continue_loop=False
                             return
+
+                        # if the player is all-in, skip betting for that player 
+                        if player in self.all_in:
+                            await self.output(f'{player} is all-in and has no action')
+                            continue
+
                         #a player needs to place a valid bet that is a fold, call, check, or raise
                         while True:
                             print('second while loop for individual betting enter')
@@ -197,6 +210,7 @@ class Table():
                             else:
                                 print("Invalid bet. Please enter another bet.")
                                 await self.send_to_user(player.player_id, '❌ Invalid bet. Please enter another bet.')
+
 
                         #remove the player from the order if they fold
                         if playerbet==-1:
@@ -229,6 +243,7 @@ class Table():
     async def evaluate(self):
         '''determine winner and give pot'''
         hands=[]
+        #if everyone else has folded, award the winner
         if len(self.order)==1:
             self.order[0].balance+=self.pot
             print(f'everyone else folded... {self.order[0].name} wins {self.pot}')
@@ -245,6 +260,19 @@ class Table():
             winners = []  # List to store players with the maximum hand value
             # Iterate through handlist excluding the winner_index
             winners.append(max_player[0])
+
+            #if the winner is all-in add the side pot to their balance and subtract it from the pot
+            for winner in winners:
+                sidepot=0
+                if winner in self.all_in:
+                    for player,bet in self.bet:
+                        if player==winner:
+                            winner.balance+=bet
+                            sidepot+=bet
+                            self.pot-=bet
+                            winners.remove(winner)
+                            await self.output(f'{winner} wins a side pot of {sidepot} with hand {str(winner.hand.handenum)}')
+
             #check to see if there are any other winners
             for index, (player, hand) in enumerate(hands):
                 if index != winner_index:
@@ -273,6 +301,8 @@ class Table():
         #takes the latest bets from each player unless the player bet then folded
         latest_bets = {}
         print(self.bet)
+
+        #go through the list of bets in reverse
         for player, bet in reversed(self.bet):
             if player not in latest_bets and bet != -1:
                 latest_bets[player] = bet
@@ -286,9 +316,18 @@ class Table():
             print('subtracting bet from balance')
             player.balance-=latest_bets[player]
             print(player,player.balance)
-        if all(value > 0.2 for value in latest_bets.values()):
-            self.pot -= 0.1
-        return sum(value for value in latest_bets.values())
+        
+        #if all the latest bets are greater than or equal to big blind then the two blinds have bet or checked
+        if all(value >= self.bigblind for value in latest_bets.values()) and self.preflop==True:
+            #remove small blind and big blind bets
+            self.bet.pop(0)
+            self.bet.pop(1)
+            print('preflop bets list after removing blinds:',self.bet)
+
+        print(latest_bets)
+        sum_pot=sum(value for value in latest_bets.values())
+        print('potcalc sum_pot: ',sum_pot)
+        return sum_pot
     
     async def pot_info_update(self):
         #send pot info
@@ -381,6 +420,7 @@ class Table():
         self.bet.append((self.order[2],self.bigblind))
         #add the small and big blind to the pot
         self.pot=self.smallblind+self.bigblind
+        await self.pot_info_update()
 
         #go through betting loop
         await self.bets()
@@ -390,6 +430,7 @@ class Table():
         #calculate the pot for preflop
         self.pot=self.potcalc()
         print('pot is: ',self.pot)
+        print('preflop betting list: ',self.bet)
 
         #send pot info
         await self.pot_info_update()
@@ -617,6 +658,13 @@ class Player():
                     print('placebet enter invalid bet attempted')
                     bet = float(await self.table.input(self.player_id,f"price is {current_price}, Invalid Bet Size, what is your new bet (0 for check, -1 for fold): "))
                     if bet <= self.balance:  # Check if bet is within balance
+
+                        #working on all-in 
+                        if bet==self.balance:
+                            self.table.all_in.append(self.player_id)
+                            print(f'{self} is now all-in')
+                        #working on all-in
+
                         return bet
                     else:
                         await self.table.send_to_user(self.player_id,"Invalid bet. Bet exceeds balance.")
@@ -631,6 +679,13 @@ class Player():
                     print('placebet valid done')
                     if bet <= self.balance:  # Check if bet is within balance
                         print('bet: ',bet)
+
+                        #working on all-in 
+                        if bet==self.balance:
+                            self.table.all_in.append(self.player_id)
+                            print(f'{self} is now all-in')
+                        #working on all-in
+                        
                         return bet
                     else:
                         await self.table.send_to_user(self.player_id,"Invalid bet. Bet exceeds balance.")
